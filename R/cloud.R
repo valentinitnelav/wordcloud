@@ -1,4 +1,4 @@
-# Author: ianfellows
+# Forked from https://github.com/ifellows/wordcloud
 ###############################################################################
 
 
@@ -150,154 +150,188 @@ wordcloud <- function(words,freq,scale=c(4,.5),min.freq=3,max.words=Inf,random.o
 	invisible()
 }
 
-#Call down to c++ to find out if any overplotting would occur
-.overlap <- function(x11,y11,sw11,sh11,boxes1){
-	.Call("is_overlap",x11,y11,sw11,sh11,boxes1)
+###############################################################################
+# Call down to c++ to find out if any overplotting would occur
+###############################################################################
+.overlap <- function(x11, y11, sw11, sh11, boxes1){
+	.Call("is_overlap", x11, y11, sw11, sh11, boxes1)
 }
 
-
-#a word cloud showing the common words among documents
-commonality.cloud <- function(term.matrix,comonality.measure=min,max.words=300,...){
+###############################################################################
+# A word cloud showing the common words among documents
+###############################################################################
+commonality.cloud <- function(term.matrix,
+                              comonality.measure = min,
+                              max.words = 300,
+                              ...){
 	ndoc <- ncol(term.matrix)
 	for(i in 1:ndoc){
 		term.matrix[,i] <- term.matrix[,i] / sum(term.matrix[,i])
 	}
-	freq <- apply(term.matrix,1,function(x) comonality.measure(x))
+	freq <- apply(term.matrix, 1, function(x) comonality.measure(x))
 	freq <- freq + min(freq)
-	wordcloud(rownames(term.matrix)[freq>0],freq[freq>0],min.freq=0,max.words=max.words,...)
+	wordcloud(rownames(term.matrix)[freq > 0],
+	          freq[freq > 0],
+	          min.freq = 0,
+	          max.words = max.words,
+	          ...)
 }
 
-
-#a cloud comparing the frequencies of words across documents
-comparison.cloud <- function(term.matrix,scale=c(4,.5),max.words=300,random.order=FALSE,
-		rot.per=.1,colors=brewer.pal(ncol(term.matrix),"Dark2"),use.r.layout=FALSE,title.size=3,...) { 
-	
-	ndoc <- ncol(term.matrix)
-	thetaBins <- seq(from=0,to=2*pi,length=ndoc+1)
-	for(i in 1:ndoc){
-		term.matrix[,i] <- term.matrix[,i] / sum(term.matrix[,i])
-	}
-	mean.rates <- rowMeans(term.matrix)
-	for(i in 1:ndoc){
-		term.matrix[,i] <- term.matrix[,i] - mean.rates
-	}
-	
-	group <- apply(term.matrix,1,function(x) which.max(x))
-	words <- rownames(term.matrix)
-	freq <- apply(term.matrix,1,function(x) max(x))
-	
-	tails <- "g|j|p|q|y"
-	last <- 1
-	nc<- length(colors)
-	
-	overlap <- function(x1, y1, sw1, sh1) {
-		if(!use.r.layout)
-			return(.overlap(x1,y1,sw1,sh1,boxes))
-		s <- 0
-		if (length(boxes) == 0) 
-			return(FALSE)
-		for (i in c(last,1:length(boxes))) {
-			bnds <- boxes[[i]]
-			x2 <- bnds[1]
-			y2 <- bnds[2]
-			sw2 <- bnds[3]
-			sh2 <- bnds[4]
-			if (x1 < x2) 
-				overlap <- x1 + sw1 > x2-s
-			else 
-				overlap <- x2 + sw2 > x1-s
-			
-			if (y1 < y2) 
-				overlap <- overlap && (y1 + sh1 > y2-s)
-			else 
-				overlap <- overlap && (y2 + sh2 > y1-s)
-			if(overlap){
-				last <<- i
-				return(TRUE)
-			}
-		}
-		FALSE
-	}
-	
-	ord <- rank(-freq, ties.method = "random")
-	words <- words[ord<=max.words]
-	freq <- freq[ord<=max.words]
-	group <- group[ord<=max.words]
-	if(random.order){
-		ord <- sample.int(length(words))
-	}else{
-		ord <- order(freq,decreasing=TRUE)
-	}
-	words <- words[ord]
-	freq <- freq[ord]
-	group <- group[ord]
-	thetaStep <- .05
-	rStep <- .05
-	plot.new()
-	op <- par("mar")
-	par(mar=c(0,0,0,0))
-	plot.window(c(0,1),c(0,1),asp=1)
-	normedFreq <- freq/max(freq)
-	size <- (scale[1]-scale[2])*normedFreq + scale[2]
-	boxes <- list()
-	
-	#add titles
-	docnames <- colnames(term.matrix)
-	for(i in 1:ncol(term.matrix)){
-		th <- mean(thetaBins[i:(i+1)])
-		word <- docnames[i]
-		wid <- strwidth(word,cex=title.size)*1.2
-		ht <- strheight(word,cex=title.size)*1.2	
-		x1 <- .5+.45*cos(th)
-		y1 <- .5+.45*sin(th)
-		rect(x1-.5*wid,y1-.5*ht,x1+.5*wid,y1+.5*ht,col="grey90", border="transparent")
-		text(x1,y1,word,cex=title.size)
-		boxes[[length(boxes)+1]] <- c(x1-.5*wid,y1-.5*ht,wid,ht)
-	}
-	
-	for(i in 1:length(words)){
-		rotWord <- runif(1)<rot.per
-		r <-0
-		theta <- runif(1,0,2*pi)
-		x1<-.5
-		y1<-.5
-		wid <- strwidth(words[i],cex=size[i],...)
-		ht <- strheight(words[i],cex=size[i],...)
-		#mind your ps and qs
-		if(grepl(tails,words[i]))
-			ht <- ht + ht*.2
-		if(rotWord){
-			tmp <- ht
-			ht <- wid
-			wid <- tmp	
-		}
-		isOverlaped <- TRUE
-		while(isOverlaped){
-			inCorrectRegion <- theta > thetaBins[group[i]] && theta < thetaBins[group[i]+1]
-			if(inCorrectRegion && !overlap(x1-.5*wid,y1-.5*ht,wid,ht) &&
-					x1-.5*wid>0 && y1-.5*ht>0 &&
-					x1+.5*wid<1 && y1+.5*ht<1){
-				text(x1,y1,words[i],cex=size[i],offset=0,srt=rotWord*90,
-						col=colors[group[i]],...)
-				#rect(x1-.5*wid,y1-.5*ht,x1+.5*wid,y1+.5*ht)
-				boxes[[length(boxes)+1]] <- c(x1-.5*wid,y1-.5*ht,wid,ht)
-				isOverlaped <- FALSE
-			}else{
-				if(r>sqrt(.5)){
-					warning(paste(words[i],
-									"could not be fit on page. It will not be plotted."))
-					isOverlaped <- FALSE
-				}
-				theta <- theta+thetaStep
-				if(theta>2*pi) theta <- theta - 2*pi
-				r <- r + rStep*thetaStep/(2*pi)
-				x1 <- .5+r*cos(theta)
-				y1 <- .5+r*sin(theta)
-			}
-		}
-	}
-	par(mar=op)
-	invisible()
+###############################################################################
+# A cloud comparing the frequencies of words across documents
+###############################################################################
+comparison.cloud <- function(term.matrix,
+                             scale = c(4, .5),
+                             max.words = 300,
+                             random.order = FALSE,
+                             rot.per = .1,
+                             colors = brewer.pal(ncol(term.matrix),"Dark2"),
+                             use.r.layout = FALSE,
+                             title.size = 3,
+                             bg.title = "white", 
+                             col.title = "black",
+                             ...) {
+  ndoc <- ncol(term.matrix)
+  thetaBins <- seq(from = 0, to = 2*pi, length = ndoc+1)
+  
+  # Compute relative frequencies
+  for(i in 1:ndoc){
+    term.matrix[,i] <- term.matrix[,i] / sum(term.matrix[,i])
+  }
+  mean.rates <- rowMeans(term.matrix)
+  for(i in 1:ndoc){
+    term.matrix[,i] <- term.matrix[,i] - mean.rates
+  }
+  
+  # Words are grouped. A group corresponds to a column in term.matrix.
+  # The maximum relative frequency dictates the group.
+  group <- apply(term.matrix, 1, function(x) which.max(x))
+  words <- rownames(term.matrix)
+  # New relative freq for each word
+  freq  <- apply(term.matrix, 1, function(x) max(x))
+  
+  tails <- "g|j|p|q|y"
+  last  <- 1
+  nc    <- length(colors)
+  
+  overlap <- function(x1, y1, sw1, sh1) {
+    if(!use.r.layout)
+      return(.overlap(x1, y1, sw1, sh1, boxes))
+    s <- 0
+    if (length(boxes) == 0) 
+      return(FALSE)
+    for (i in c(last, 1:length(boxes))) {
+      bnds <- boxes[[i]]
+      x2   <- bnds[1]
+      y2   <- bnds[2]
+      sw2  <- bnds[3]
+      sh2  <- bnds[4]
+      if (x1 < x2) 
+        overlap <- x1 + sw1 > x2-s
+      else 
+        overlap <- x2 + sw2 > x1-s
+      
+      if (y1 < y2) 
+        overlap <- overlap && (y1 + sh1 > y2-s)
+      else 
+        overlap <- overlap && (y2 + sh2 > y1-s)
+      if(overlap){
+        last <<- i
+        return(TRUE)
+      }
+    }
+    FALSE
+  }
+  
+  ord   <- rank(-freq, ties.method = "random") # order of size (based on freq)
+  words <- words[ord <= max.words]
+  freq  <- freq[ord <= max.words]
+  group <- group[ord <= max.words]
+  if(random.order){
+    ord <- sample.int(length(words))
+  }else{
+    ord <- order(freq,decreasing=TRUE)
+  }
+  words <- words[ord]
+  freq  <- freq[ord]
+  group <- group[ord]
+  thetaStep <- .05
+  rStep <- .05
+  plot.new()
+  op <- par("mar")
+  par(mar=c(0,0,0,0))
+  plot.window(c(0,1), c(0,1), asp = 1)
+  normedFreq <- freq / max(freq)
+  size <- (scale[1] - scale[2]) * normedFreq + scale[2]
+  boxes <- list()
+  
+  # Add group labels
+  docnames <- colnames(term.matrix)
+  for(i in 1:ncol(term.matrix)){
+    th   <- mean(thetaBins[i:(i+1)])
+    word <- docnames[i]
+    wid  <- strwidth(word, cex = title.size) * 1.2
+    ht <- strheight(word, cex = title.size) * 1.2	
+    x1 <- .5 + .45 * cos(th)
+    y1 <- .5 + .45 * sin(th)
+    # add parameters to rect & text
+    rect(x1-.5*wid, y1-.5*ht, x1+.5*wid, y1+.5*ht, 
+         col = bg.title, 
+         border = "transparent")
+    text(x1, y1, word, 
+         cex = title.size, 
+         col = col.title)
+    boxes[[length(boxes) + 1]] <- c(x1-.5*wid, y1-.5*ht, wid, ht)
+  }
+  
+  for(i in 1:length(words)){
+    rotWord <- runif(1) < rot.per
+    r <-0
+    theta <- runif(1, 0, 2*pi)
+    x1 <- .5
+    y1 <- .5
+    wid <- strwidth(words[i], cex = size[i], ...)
+    ht  <- strheight(words[i], cex = size[i], ...)
+    # Mind your ps and qs
+    if(grepl(tails, words[i]))
+      ht <- ht + ht*.2
+    if(rotWord){
+      tmp <- ht
+      ht  <- wid
+      wid <- tmp	
+    }
+    isOverlaped <- TRUE
+    while(isOverlaped){
+      inCorrectRegion <- theta > thetaBins[group[i]] && theta < thetaBins[group[i]+1]
+      if(inCorrectRegion && 
+         !overlap(x1-.5*wid,y1-.5*ht,wid,ht) &&
+         x1-.5*wid>0 && y1-.5*ht>0 &&
+         x1+.5*wid<1 && y1+.5*ht<1){
+        text(x1, y1, words[i], 
+             cex = size[i], 
+             offset = 0, 
+             srt = rotWord*90, 
+             col = colors[group[i]], 
+             ...)
+        # One can put rectangles arround words
+        #rect(x1-.5*wid,y1-.5*ht,x1+.5*wid,y1+.5*ht)
+        boxes[[length(boxes)+1]] <- c(x1-.5*wid, y1-.5*ht, wid, ht)
+        isOverlaped <- FALSE
+      }else{
+        if(r > sqrt(.5)){
+          warning(paste(words[i], "could not be fit on page. It will not be plotted."))
+          isOverlaped <- FALSE
+        }
+        theta <- theta + thetaStep
+        if (theta>2*pi) theta <- theta - 2*pi
+        r  <- r + rStep*thetaStep/(2*pi)
+        x1 <- .5 + r*cos(theta)
+        y1 <- .5 + r*sin(theta)
+      }
+    }
+  }
+  par(mar = op)
+  invisible()
 }
 
 

@@ -21,7 +21,9 @@ comparison.cloud(term.matrix,scale=c(4,.5),max.words=300,
   \item{colors}{color words from least to most frequent}
   \item{use.r.layout}{if false, then c++ code is used for collision detection, otherwise R is used}
   \item{title.size}{Size of document titles}
-  \item{...}{Additional parameters to be passed to text (and strheight,strwidth).}
+  \item{bg.title}{Background color of document titles}
+  \item{col.title}{Color of document titles}
+  \item{...}{Additional parameters to be passed to text (and strheight, strwidth).}
 }
 \details{
 Let \eqn{p_{i,j}} be the rate at which word i occurs in document j, and \eqn{p_j} be the
